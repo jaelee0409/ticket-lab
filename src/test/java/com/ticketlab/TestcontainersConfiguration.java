@@ -15,7 +15,7 @@ import org.testcontainers.utility.DockerImageName;
  * not evidence about the system we are measuring.
  */
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
 
     @Bean
     @ServiceConnection
