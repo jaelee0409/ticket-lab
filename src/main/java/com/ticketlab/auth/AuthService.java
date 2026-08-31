@@ -43,4 +43,11 @@ public class AuthService {
 
         return new TokenResponse(tokenProvider.createAccessToken(user.getId(), user.getEmail()), tokenProvider.getAccessTokenTtl().toSeconds());
     }
+
+    @Transactional(readOnly = true)
+    public UserResponse findMe(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.USER_NOT_FOUND));
+        return new UserResponse(user.getId(), user.getEmail());
+    }
 }
