@@ -2,5 +2,40 @@ spring:
   application:
     name: ticket-lab
 
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketlab}
+    username: ${DB_USER:ticketlab}
+    password: ${DB_PASSWORD:ticketlab}
+    hikari:
+      pool-name: ticket-lab-pool
+      # Experiment knob (goal 3): sweep this to find where a bigger pool
+      # stops helping and starts hurting.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+
+  jpa:
+    hibernate:
+      # Schema is owned by Flyway migrations, never by Hibernate.
+      ddl-auto: none
+    # Must stay false: with OSIV on, a DB connection is held for the entire
+    # request including view rendering, which silently caps throughput and
+    # would invalidate the connection-pool experiment.
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      # Local development only - reveals infrastructure internals.
+      show-details: always
+      show-components: always
