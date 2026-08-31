@@ -2,7 +2,7 @@ package com.ticketlab.reservation;
 
 import java.time.Instant;
 
-import com.ticketlab.performance.Seat;
+import com.ticketlab.event.Seat;
 import com.ticketlab.user.User;
 
 import jakarta.persistence.Column;

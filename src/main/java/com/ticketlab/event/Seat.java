@@ -1,4 +1,4 @@
-package com.ticketlab.performance;
+package com.ticketlab.event;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,12 +19,12 @@ public class Seat {
     private Long id;
 
     /**
-     * Unidirectional on purpose. Performance has no getSeats() collection: a
+     * Unidirectional on purpose. Event has no getSeats() collection: a
      * sold-out arena would load thousands of rows for anyone who touched it.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "performance_id", nullable = false)
-    private Performance performance;
+    @JoinColumn(name = "event_id", nullable = false)
+    private Event event;
 
     @Column(name = "seat_no", nullable = false, length = 20)
     private String seatNo;
@@ -44,8 +44,8 @@ public class Seat {
     protected Seat() {
     }
 
-    public Seat(Performance performance, String seatNo, SeatGrade grade, int price) {
-        this.performance = performance;
+    public Seat(Event event, String seatNo, SeatGrade grade, int price) {
+        this.event = event;
         this.seatNo = seatNo;
         this.grade = grade;
         this.price = price;
@@ -68,8 +68,8 @@ public class Seat {
         return id;
     }
 
-    public Performance getPerformance() {
-        return performance;
+    public Event getEvent() {
+        return event;
     }
 
     public String getSeatNo() {

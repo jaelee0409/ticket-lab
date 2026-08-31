@@ -20,11 +20,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 import com.ticketlab.payment.Payment;
 import com.ticketlab.payment.PaymentRepository;
 import com.ticketlab.payment.PaymentStatus;
-import com.ticketlab.performance.Performance;
-import com.ticketlab.performance.Seat;
-import com.ticketlab.performance.SeatGrade;
-import com.ticketlab.performance.SeatRepository;
-import com.ticketlab.performance.SeatStatus;
+import com.ticketlab.event.Event;
+import com.ticketlab.event.Seat;
+import com.ticketlab.event.SeatGrade;
+import com.ticketlab.event.SeatRepository;
+import com.ticketlab.event.SeatStatus;
 import com.ticketlab.reservation.Reservation;
 import com.ticketlab.reservation.ReservationRepository;
 import com.ticketlab.reservation.ReservationStatus;
@@ -54,13 +54,13 @@ class DomainMappingTest {
     @Test
     @DisplayName("공연에 속한 좌석을 저장하고 좌석번호 순으로 다시 읽는다")
     void savesSeatsAndReadsThemBackInOrder() {
-        Performance concert = em.persist(newPerformance());
+        Event concert = em.persist(newEvent());
         em.persist(new Seat(concert, "A-02", SeatGrade.R, 120_000));
         em.persist(new Seat(concert, "A-01", SeatGrade.VIP, 180_000));
         em.flush();
         em.clear();
 
-        List<Seat> seats = seatRepository.findByPerformanceIdOrderBySeatNoAsc(concert.getId());
+        List<Seat> seats = seatRepository.findByEventIdOrderBySeatNoAsc(concert.getId());
 
         assertThat(seats).extracting(Seat::getSeatNo).containsExactly("A-01", "A-02");
         assertThat(seats).allMatch(seat -> seat.getStatus() == SeatStatus.AVAILABLE);
@@ -68,21 +68,21 @@ class DomainMappingTest {
 
     @Test
     @DisplayName("좌석에서 공연으로 가는 연관관계는 실제로 지연 로딩된다")
-    void performanceIsFetchedLazilyFromSeat() {
-        Performance concert = em.persist(newPerformance());
+    void eventIsFetchedLazilyFromSeat() {
+        Event concert = em.persist(newEvent());
         Seat saved = em.persist(new Seat(concert, "B-07", SeatGrade.S, 90_000));
         em.flush();
         em.clear();
 
         Seat seat = seatRepository.findById(saved.getId()).orElseThrow();
 
-        assertThat(Hibernate.isInitialized(seat.getPerformance()))
+        assertThat(Hibernate.isInitialized(seat.getEvent()))
                 .as("공연을 건드리기 전에는 프록시 상태여야 한다")
                 .isFalse();
 
-        assertThat(seat.getPerformance().getTitle()).isEqualTo("한여름 밤의 재즈");
+        assertThat(seat.getEvent().getTitle()).isEqualTo("한여름 밤의 재즈");
 
-        assertThat(Hibernate.isInitialized(seat.getPerformance()))
+        assertThat(Hibernate.isInitialized(seat.getEvent()))
                 .as("필드를 읽는 순간 조회 쿼리가 나가고 초기화된다")
                 .isTrue();
     }
@@ -91,7 +91,7 @@ class DomainMappingTest {
     @DisplayName("예약은 사용자와 좌석을 함께 가리킨다")
     void reservationLinksUserAndSeat() {
         User buyer = em.persist(new User("buyer@ticketlab.dev", "hashed"));
-        Performance concert = em.persist(newPerformance());
+        Event concert = em.persist(newEvent());
         Seat seat = em.persist(new Seat(concert, "C-11", SeatGrade.A, 60_000));
 
         Reservation saved = em.persist(
@@ -112,7 +112,7 @@ class DomainMappingTest {
     @Test
     @DisplayName("좌석 상태를 바꾸면 save 호출 없이 반영된다")
     void statusChangeIsFlushedWithoutCallingSave() {
-        Performance concert = em.persist(newPerformance());
+        Event concert = em.persist(newEvent());
         Seat seat = em.persist(new Seat(concert, "D-01", SeatGrade.S, 90_000));
         em.flush();
 
@@ -128,7 +128,7 @@ class DomainMappingTest {
     @Test
     @DisplayName("열거형은 순번이 아니라 이름 문자열로 저장된다")
     void enumsAreStoredAsNames() {
-        Performance concert = em.persist(newPerformance());
+        Event concert = em.persist(newEvent());
         Seat seat = em.persist(new Seat(concert, "E-09", SeatGrade.VIP, 180_000));
         em.flush();
 
@@ -182,8 +182,8 @@ class DomainMappingTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
-    private Performance newPerformance() {
-        return new Performance(
+    private Event newEvent() {
+        return new Event(
                 "한여름 밤의 재즈",
                 "블루스퀘어 마스터카드홀",
                 Instant.now().plus(30, ChronoUnit.DAYS));
@@ -191,7 +191,7 @@ class DomainMappingTest {
 
     private Reservation persistReservation(String email, String seatNo) {
         User user = em.persist(new User(email, "hashed"));
-        Performance concert = em.persist(newPerformance());
+        Event concert = em.persist(newEvent());
         Seat seat = em.persist(new Seat(concert, seatNo, SeatGrade.R, 120_000));
         return em.persist(new Reservation(user, seat, Instant.now().plus(5, ChronoUnit.MINUTES)));
     }

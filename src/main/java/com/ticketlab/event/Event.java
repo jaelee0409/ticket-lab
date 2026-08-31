@@ -1,4 +1,4 @@
-package com.ticketlab.performance;
+package com.ticketlab.event;
 
 import java.time.Instant;
 
@@ -9,7 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 @Entity
-public class Performance {
+public class Event {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,10 +27,10 @@ public class Performance {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected Performance() {
+    protected Event() {
     }
 
-    public Performance(String title, String venue, Instant startsAt) {
+    public Event(String title, String venue, Instant startsAt) {
         this.title = title;
         this.venue = venue;
         this.startsAt = startsAt;

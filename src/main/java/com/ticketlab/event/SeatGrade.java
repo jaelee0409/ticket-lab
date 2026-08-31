@@ -1,4 +1,4 @@
-package com.ticketlab.performance;
+package com.ticketlab.event;
 
 public enum SeatGrade {
     VIP, R, S, A
