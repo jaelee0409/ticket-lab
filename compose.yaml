@@ -1,0 +1,45 @@
+name: ticket-lab
+
+services:
+  postgres:
+    image: postgres:18.6
+    container_name: ticket-lab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ticketlab
+      POSTGRES_USER: ticketlab
+      POSTGRES_PASSWORD: ticketlab
+      # Deterministic sort/compare behaviour across machines and CI.
+      LANG: C.UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume, NOT a host bind mount: keeps the data inside the WSL2 VM's
+      # native filesystem. A bind mount would cross the Windows boundary on every
+      # write, which is slow enough to distort load-test numbers.
+      # PG18 moved its volume from /var/lib/postgresql/data up to /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketlab -d ticketlab"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:8.8
+    container_name: ticket-lab-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  redisdata:
