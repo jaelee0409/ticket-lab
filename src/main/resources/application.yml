@@ -41,6 +41,7 @@ ticketlab:
     # How long a held seat stays reserved before the sweeper releases it.
     # Experiment knob: this is one axis of the queue experiment later.
     hold-duration: ${HOLD_DURATION:5m}
+    sweep-interval-ms: ${SWEEP_INTERVAL_MS:10000}
 
 management:
   endpoints:

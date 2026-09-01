@@ -42,7 +42,7 @@ public class ReservationService {
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
 
-        log.info("Hold requested. seatId={} currentStatus={}", seatId, seat.getStatus());
+        log.info("좌석 선점 요청. seatId={} status={}", seatId, seat.getStatus());
 
         if (seat.getStatus() != SeatStatus.AVAILABLE) {
             throw new TicketLabException(ErrorCode.SEAT_NOT_AVAILABLE);
@@ -50,20 +50,13 @@ public class ReservationService {
 
         seat.hold();
         Reservation reservation = reservationRepository.save(new Reservation(user, seat, Instant.now().plus(holdDuration)));
-        log.info("Seat held. seatId={} reservationId={}", seatId, reservation.getId());
+        log.info("좌석 선점 완료. seatId={} reservationId={}", seatId, reservation.getId());
         
         return new ReservationResponse(reservation.getId(), seatId, seat.getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
     }
 
     @Transactional
     public ReservationResponse confirm(Long userId, Long reservationId) {
-        // 1. find the reservation          → RESERVATION_NOT_FOUND
-        // 2. owner check                   → RESERVATION_FORBIDDEN
-        // 3. status must be PENDING        → RESERVATION_NOT_PENDING
-        // 4. expiresAt must be in the future → RESERVATION_EXPIRED
-        // 5. reservation.confirm()
-        //    reservation.getSeat().sell()
-        // 6. log it, then return a ReservationResponse
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new TicketLabException(ErrorCode.RESERVATION_NOT_FOUND));
         
@@ -81,7 +74,7 @@ public class ReservationService {
 
         reservation.confirm();
         reservation.getSeat().sell();
-        log.info("Reservation confirmed. reservationId={} seatId={}", reservationId, reservation.getSeat().getId());
+        log.info("예약 확정. reservationId={} seatId={}", reservationId, reservation.getSeat().getId());
         return new ReservationResponse(reservation.getId(), reservation.getSeat().getId(), reservation.getSeat().getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
     }
 }
