@@ -54,4 +54,34 @@ public class ReservationService {
         
         return new ReservationResponse(reservation.getId(), seatId, seat.getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
     }
+
+    @Transactional
+    public ReservationResponse confirm(Long userId, Long reservationId) {
+        // 1. find the reservation          → RESERVATION_NOT_FOUND
+        // 2. owner check                   → RESERVATION_FORBIDDEN
+        // 3. status must be PENDING        → RESERVATION_NOT_PENDING
+        // 4. expiresAt must be in the future → RESERVATION_EXPIRED
+        // 5. reservation.confirm()
+        //    reservation.getSeat().sell()
+        // 6. log it, then return a ReservationResponse
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.RESERVATION_NOT_FOUND));
+        
+        if (!reservation.getUser().getId().equals(userId)) {
+            throw new TicketLabException(ErrorCode.RESERVATION_FORBIDDEN);
+        }
+
+        if (reservation.getStatus() != ReservationStatus.PENDING) {
+            throw new TicketLabException(ErrorCode.RESERVATION_NOT_PENDING);
+        }
+
+        if (reservation.getExpiresAt().isBefore(Instant.now())) {
+            throw new TicketLabException(ErrorCode.RESERVATION_EXPIRED);
+        }
+
+        reservation.confirm();
+        reservation.getSeat().sell();
+        log.info("Reservation confirmed. reservationId={} seatId={}", reservationId, reservation.getSeat().getId());
+        return new ReservationResponse(reservation.getId(), reservation.getSeat().getId(), reservation.getSeat().getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
+    }
 }

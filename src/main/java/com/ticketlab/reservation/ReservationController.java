@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,5 +26,11 @@ public class ReservationController {
     public ReservationResponse hold(@AuthenticationPrincipal Long userId,
                                     @Valid @RequestBody HoldSeatRequest request) {
         return reservationService.hold(userId, request.seatId());
-    }   
+    }
+
+    @PostMapping("/{reservationId}/confirm")
+    public ReservationResponse confirm(@AuthenticationPrincipal Long userId,
+                                       @PathVariable Long reservationId) {
+        return reservationService.confirm(userId, reservationId);
+    }
 }

@@ -11,7 +11,11 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_004", "리프레시 토큰이 유효하지 않습니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_001", "사용자를 찾을 수 없습니다."),
     SEAT_NOT_FOUND(HttpStatus.NOT_FOUND, "SEAT_001", "좌석을 찾을 수 없습니다."),
-    SEAT_NOT_AVAILABLE(HttpStatus.CONFLICT, "SEAT_002", "이미 선점되었거나 판매된 좌석입니다.");
+    SEAT_NOT_AVAILABLE(HttpStatus.CONFLICT, "SEAT_002", "이미 선점되었거나 판매된 좌석입니다."),
+    RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "RESV_001", "예약을 찾을 수 없습니다."),
+    RESERVATION_FORBIDDEN(HttpStatus.FORBIDDEN, "RESV_002", "본인의 예약이 아닙니다."),
+    RESERVATION_NOT_PENDING(HttpStatus.CONFLICT, "RESV_003", "확정할 수 있는 상태가 아닙니다."),
+    RESERVATION_EXPIRED(HttpStatus.CONFLICT, "RESV_004", "선점 시간이 만료되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
