@@ -26,6 +26,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/signup", "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
                 .requestMatchers("/actuator/health/**").permitAll()
+                // Static test console served from resources/static.
+                .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.ico").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint(jwtAuthenticationEntryPoint))
