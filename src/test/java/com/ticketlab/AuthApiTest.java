@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.test.web.servlet.MvcResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,17 @@ class AuthApiTest {
     }
 
     @Test
+    @DisplayName("유효한 토큰으로 부르면 내 정보를 돌려준다")
+    void validTokenReachesProtectedEndpoint() throws Exception {
+        signup("valid@text.com", "password123");
+        String token = login("valid@text.com", "password123");
+        mockMvc.perform(get("/api/auth/me")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("valid@text.com"));
+    }
+
+    @Test
     @DisplayName("좌석 조회는 공개 엔드포인트라 토큰 없이도 된다")
     void seatLookupIsPublic() throws Exception {
         mockMvc.perform(get("/api/events/1/seats"))
@@ -93,5 +105,16 @@ class AuthApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isCreated());
+    }
+
+    private String login(String email, String password) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("accessToken").asString();
     }
 }
