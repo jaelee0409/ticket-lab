@@ -1,0 +1,15 @@
+# Prometheus runs in a container; the Spring app runs on the Windows host.
+# host.docker.internal is how a container reaches back out to the host.
+global:
+  scrape_interval: 2s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: ticket-lab
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

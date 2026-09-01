@@ -1,5 +1,10 @@
 name: ticket-lab
 
+# Resource limits are deliberate. A measurement is only comparable to another
+# measurement taken under the same conditions, and "whatever the laptop felt
+# like giving Postgres that afternoon" is not a condition you can reproduce.
+# Every limit is overridable so it can become an experiment axis.
+
 services:
   postgres:
     image: postgres:18.6
@@ -9,7 +14,6 @@ services:
       POSTGRES_DB: ticketlab
       POSTGRES_USER: ticketlab
       POSTGRES_PASSWORD: ticketlab
-      # Deterministic sort/compare behaviour across machines and CI.
       LANG: C.UTF-8
     ports:
       - "5432:5432"
@@ -19,6 +23,11 @@ services:
       # write, which is slow enough to distort load-test numbers.
       # PG18 moved its volume from /var/lib/postgresql/data up to /var/lib/postgresql.
       - pgdata:/var/lib/postgresql
+    deploy:
+      resources:
+        limits:
+          cpus: "${POSTGRES_CPUS:-4}"
+          memory: "${POSTGRES_MEMORY:-2g}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ticketlab -d ticketlab"]
       interval: 5s
@@ -34,12 +43,65 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "${REDIS_CPUS:-2}"
+          memory: "${REDIS_MEMORY:-512m}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: ticket-lab-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      # Keep every run; this database is the experiment record.
+      - --storage.tsdb.retention.time=30d
+    extra_hosts:
+      # The Spring app runs on the Windows host, not in a container.
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          cpus: "${PROMETHEUS_CPUS:-1}"
+          memory: "${PROMETHEUS_MEMORY:-1g}"
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    container_name: ticket-lab-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Local only. No login wall while staring at graphs.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "${GRAFANA_CPUS:-1}"
+          memory: "${GRAFANA_MEMORY:-512m}"
+
 volumes:
   pgdata:
   redisdata:
+  promdata:
+  grafanadata:

@@ -25,7 +25,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/signup", "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
-                .requestMatchers("/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
                 // Static test console served from resources/static.
                 .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.ico").permitAll()
                 .anyRequest().authenticated())

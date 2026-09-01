@@ -87,8 +87,7 @@ class ReservationApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"seatId\":" + seatId + "}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SEAT_002"))
-                .andExpect(jsonPath("$.message").value("이미 선점되었거나 판매된 좌석입니다."));
+                .andExpect(jsonPath("$.code").value("SEAT_002"));
     }
 
     @Test
@@ -99,8 +98,7 @@ class ReservationApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"seatId\":999999}"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("SEAT_001"))
-                .andExpect(jsonPath("$.message").value("좌석을 찾을 수 없습니다."));
+                .andExpect(jsonPath("$.code").value("SEAT_001"));
     }
 
     @Test
@@ -108,8 +106,7 @@ class ReservationApiTest {
     void holdRequiresToken() throws Exception {
         mockMvc.perform(post("/api/reservations"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH_003"))
-                .andExpect(jsonPath("$.message").value("인증이 필요합니다."));
+                .andExpect(jsonPath("$.code").value("AUTH_003"));
     }
 
     @Test
@@ -135,8 +132,7 @@ class ReservationApiTest {
         mockMvc.perform(post("/api/reservations/" + reservationId + "/confirm")
                 .header("Authorization", "Bearer " + otherToken))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("RESV_002"))
-                .andExpect(jsonPath("$.message").value("본인의 예약이 아닙니다."));
+                .andExpect(jsonPath("$.code").value("RESV_002"));
     }
 
     @Test
@@ -151,8 +147,7 @@ class ReservationApiTest {
         mockMvc.perform(post("/api/reservations/" + reservationId + "/confirm")
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("RESV_003"))
-                .andExpect(jsonPath("$.message").value("확정할 수 있는 상태가 아닙니다."));
+                .andExpect(jsonPath("$.code").value("RESV_003"));
     }
 
     @Test

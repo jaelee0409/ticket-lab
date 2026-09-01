@@ -47,7 +47,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus,metrics
+  metrics:
+    tags:
+      # Every series gets this label, so one Prometheus can hold several runs.
+      application: ticket-lab
+    distribution:
+      # Publishes the bucket series Prometheus needs to compute percentiles.
+      # Without this, only count/sum/max exist and p95 cannot be derived.
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2s
   endpoint:
     health:
       # Local development only - reveals infrastructure internals.
