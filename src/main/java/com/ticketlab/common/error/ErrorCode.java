@@ -9,7 +9,9 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH_002", "이메일 또는 비밀번호가 올바르지 않습니다."),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "AUTH_003", "인증이 필요합니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_004", "리프레시 토큰이 유효하지 않습니다."),
-    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_001", "사용자를 찾을 수 없습니다.");
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_001", "사용자를 찾을 수 없습니다."),
+    SEAT_NOT_FOUND(HttpStatus.NOT_FOUND, "SEAT_001", "좌석을 찾을 수 없습니다."),
+    SEAT_NOT_AVAILABLE(HttpStatus.CONFLICT, "SEAT_002", "이미 선점되었거나 판매된 좌석입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

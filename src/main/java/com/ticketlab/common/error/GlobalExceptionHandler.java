@@ -1,13 +1,15 @@
 package com.ticketlab.common.error;
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -40,5 +42,12 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, detail));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
+        // return INVALID_REQUEST (400), like your validation handler
+        return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "Invalid request body"));
     }
 }

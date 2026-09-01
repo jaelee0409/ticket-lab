@@ -37,6 +37,10 @@ ticketlab:
   auth:
     jwt-secret: ${JWT_SECRET:ticket-lab-local-development-secret-key-do-not-ship}
     access-token-ttl: ${ACCESS_TOKEN_TTL:15m}
+  reservation:
+    # How long a held seat stays reserved before the sweeper releases it.
+    # Experiment knob: this is one axis of the queue experiment later.
+    hold-duration: ${HOLD_DURATION:5m}
 
 management:
   endpoints:
