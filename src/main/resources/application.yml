@@ -29,6 +29,10 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-------}]"
+
 ticketlab:
   auth:
     jwt-secret: ${JWT_SECRET:ticket-lab-local-development-secret-key-do-not-ship}
