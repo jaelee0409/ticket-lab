@@ -12,6 +12,8 @@ import http from "k6/http";
 const BASE = __ENV.BASE_URL || "http://localhost:8080";
 const SEAT_COUNT = Number(__ENV.SEAT_COUNT || 20);
 
+http.setResponseCallback(http.expectedStatuses(200, 201, 409));
+
 export const options = {
   vus: Number(__ENV.VUS || 50),
   duration: __ENV.DURATION || "30s",
