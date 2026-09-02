@@ -36,13 +36,30 @@ public class ReservationCore {
 
     @Transactional
     public ReservationResponse hold(Long userId, Long seatId) {
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
+        return holdSeat(userId, seat);
+    }
+
+    @Transactional
+    public ReservationResponse holdWithLock(Long userId, Long seatId) {
+        Seat seat = seatRepository.findByIdForUpdate(seatId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
+        return holdSeat(userId, seat);
+    }
+
+    private ReservationResponse holdSeat(Long userId, Seat seat) {
+        // 기존 hold() 의 나머지 전부:
+        //   user 조회, 로그, 상태 검사, seat.hold(), 예약 저장, 응답
+        //   단 seatId 대신 seat.getId() 를 쓴다
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new TicketLabException(ErrorCode.USER_NOT_FOUND));
 
-        Seat seat = seatRepository.findById(seatId)
+        Seat seatToHold = seatRepository.findById(seat.getId())
                 .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
 
-        log.info("좌석 선점 요청. seatId={} status={}", seatId, seat.getStatus());
+        log.info("좌석 선점 요청. seatId={} status={}", seatToHold.getId(), seat.getStatus());
 
         if (seat.getStatus() != SeatStatus.AVAILABLE) {
             throw new TicketLabException(ErrorCode.SEAT_NOT_AVAILABLE);
@@ -50,8 +67,8 @@ public class ReservationCore {
 
         seat.hold();
         Reservation reservation = reservationRepository.save(new Reservation(user, seat, Instant.now().plus(holdDuration)));
-        log.info("좌석 선점 완료. seatId={} reservationId={}", seatId, reservation.getId());
+        log.info("좌석 선점 완료. seatId={} reservationId={}", seatToHold.getId(), reservation.getId());
         
-        return new ReservationResponse(reservation.getId(), seatId, seat.getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
+        return new ReservationResponse(reservation.getId(), seatToHold.getId(), seatToHold.getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
     }
 }

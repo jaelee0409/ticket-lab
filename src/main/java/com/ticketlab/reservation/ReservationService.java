@@ -23,9 +23,6 @@ public class ReservationService {
     private final String strategyName;
 
     private final ReservationRepository reservationRepository;
-    private final SeatRepository seatRepository;
-    private final UserRepository userRepository;
-    private final Duration holdDuration;
 
     private static final Logger log = LoggerFactory.getLogger(ReservationService.class);
 
@@ -37,9 +34,6 @@ public class ReservationService {
             @Value("${ticketlab.lock.strategy}") String strategyName){
 
         this.reservationRepository = reservationRepository;
-        this.seatRepository = seatRepository;
-        this.userRepository = userRepository;
-        this.holdDuration = holdDuration;
         this.strategies = strategies;
         this.strategyName = strategyName;
 
