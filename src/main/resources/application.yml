@@ -45,6 +45,8 @@ ticketlab:
   lock:
     strategy: ${LOCK_STRATEGY:none}
     optimistic-max-retries: ${OPTIMISTIC_MAX_RETRIES:3}
+    redis-wait-ms: ${REDIS_LOCK_WAIT_MS:3000}
+    redis-lease-ms: ${REDIS_LOCK_LEASE_MS:5000}
 
 management:
   endpoints:

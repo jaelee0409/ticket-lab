@@ -28,6 +28,10 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
 
+	// 스프링 부트 스타터가 아니라 코어 라이브러리만 쓴다. 스타터는 부트 버전에
+	// 맞춰 자동 설정을 얹는데, 부트 4 지원 여부에 프로젝트를 묶을 이유가 없다.
+	implementation("org.redisson:redisson:3.50.0")
+
 	implementation("io.jsonwebtoken:jjwt-api:0.12.6")
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")

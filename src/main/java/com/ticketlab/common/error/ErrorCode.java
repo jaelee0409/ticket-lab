@@ -15,7 +15,8 @@ public enum ErrorCode {
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "RESV_001", "예약을 찾을 수 없습니다."),
     RESERVATION_FORBIDDEN(HttpStatus.FORBIDDEN, "RESV_002", "본인의 예약이 아닙니다."),
     RESERVATION_NOT_PENDING(HttpStatus.CONFLICT, "RESV_003", "확정할 수 있는 상태가 아닙니다."),
-    RESERVATION_EXPIRED(HttpStatus.CONFLICT, "RESV_004", "선점 시간이 만료되었습니다.");
+    RESERVATION_EXPIRED(HttpStatus.CONFLICT, "RESV_004", "선점 시간이 만료되었습니다."),
+    LOCK_ACQUIRE_FAILED(HttpStatus.CONFLICT, "LOCK_001", "좌석 잠금을 얻지 못했습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
