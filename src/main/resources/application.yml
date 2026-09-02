@@ -44,6 +44,7 @@ ticketlab:
     sweep-interval-ms: ${SWEEP_INTERVAL_MS:10000}
   lock:
     strategy: ${LOCK_STRATEGY:none}
+    optimistic-max-retries: ${OPTIMISTIC_MAX_RETRIES:3}
 
 management:
   endpoints:

@@ -41,6 +41,9 @@ public class Seat {
     @Column(nullable = false, length = 20)
     private SeatStatus status;
 
+    @Column(nullable = false)
+    private long version;
+
     protected Seat() {
     }
 
@@ -86,5 +89,9 @@ public class Seat {
 
     public SeatStatus getStatus() {
         return status;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }
