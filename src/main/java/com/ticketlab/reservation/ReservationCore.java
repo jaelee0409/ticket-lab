@@ -14,6 +14,7 @@ import com.ticketlab.common.error.TicketLabException;
 import com.ticketlab.event.Seat;
 import com.ticketlab.event.SeatRepository;
 import com.ticketlab.event.SeatStatus;
+import com.ticketlab.reservation.lock.LockMetrics;
 import com.ticketlab.reservation.lock.OptimisticRetryException;
 import com.ticketlab.user.User;
 import com.ticketlab.user.UserRepository;
@@ -25,14 +26,20 @@ public class ReservationCore {
     private final SeatRepository seatRepository;
     private final UserRepository userRepository;
     private final Duration holdDuration;
+    private final LockMetrics metrics;
 
     private static final Logger log = LoggerFactory.getLogger(ReservationCore.class);
 
-    public ReservationCore(ReservationRepository reservationRepository, SeatRepository seatRepository, UserRepository userRepository, @Value("${ticketlab.reservation.hold-duration}") Duration holdDuration) {
+    public ReservationCore(ReservationRepository reservationRepository,
+                            SeatRepository seatRepository,
+                            UserRepository userRepository,
+                            @Value("${ticketlab.reservation.hold-duration}") Duration holdDuration,
+                            LockMetrics metrics) {
         this.reservationRepository = reservationRepository;
         this.seatRepository = seatRepository;
         this.userRepository = userRepository;
         this.holdDuration = holdDuration;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -44,8 +51,10 @@ public class ReservationCore {
 
     @Transactional
     public ReservationResponse holdWithLock(Long userId, Long seatId) {
+        var waitSample = metrics.start();
         Seat seat = seatRepository.findByIdForUpdate(seatId)
                 .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
+        metrics.recordWait("pessimistic", waitSample);
         return holdSeat(userId, seat);
     }
 

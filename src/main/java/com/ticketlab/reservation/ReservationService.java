@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketlab.common.error.ErrorCode;
 import com.ticketlab.common.error.TicketLabException;
 import com.ticketlab.event.SeatRepository;
+import com.ticketlab.reservation.lock.LockMetrics;
 import com.ticketlab.reservation.lock.ReservationLockStrategy;
 import com.ticketlab.user.UserRepository;
 
@@ -21,6 +22,8 @@ public class ReservationService {
 
     private final Map<String, ReservationLockStrategy> strategies;
     private final String strategyName;
+    private final LockMetrics metrics;
+
 
     private final ReservationRepository reservationRepository;
 
@@ -31,11 +34,13 @@ public class ReservationService {
             UserRepository userRepository,
             @Value("${ticketlab.reservation.hold-duration}") Duration holdDuration,
             Map<String, ReservationLockStrategy> strategies,
-            @Value("${ticketlab.lock.strategy}") String strategyName){
+            @Value("${ticketlab.lock.strategy}") String strategyName,
+            LockMetrics metrics){
 
         this.reservationRepository = reservationRepository;
         this.strategies = strategies;
         this.strategyName = strategyName;
+        this.metrics = metrics;
 
         if (!strategies.containsKey(strategyName)) {
             throw new IllegalArgumentException(
@@ -45,7 +50,15 @@ public class ReservationService {
     }
 
     public ReservationResponse hold(Long userId, Long seatId) {
-        return strategies.get(strategyName).hold(userId, seatId);
+        var sample = metrics.start();
+        try {
+            ReservationResponse response = strategies.get(strategyName).hold(userId, seatId);
+            metrics.recordOutcome(strategyName, "acquired", sample);
+            return response;
+        } catch (TicketLabException e) {
+            metrics.recordOutcome(strategyName, e.getErrorCode().getCode(), sample);
+            throw e;
+        }
     }
 
     @Transactional

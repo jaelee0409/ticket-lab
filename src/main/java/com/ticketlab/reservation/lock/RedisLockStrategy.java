@@ -19,28 +19,35 @@ public class RedisLockStrategy implements ReservationLockStrategy {
     private final RedissonClient redissonClient;
     private final long waitMs;
     private final long leaseMs;
+    private final LockMetrics metrics;
 
     public RedisLockStrategy(ReservationCore core, RedissonClient redissonClient, @Value("${ticketlab.lock.redis-wait-ms}") long waitMs,
-            @Value("${ticketlab.lock.redis-lease-ms}") long leaseMs) {
+            @Value("${ticketlab.lock.redis-lease-ms}") long leaseMs, LockMetrics metrics) {
         this.core = core;
         this.redissonClient = redissonClient;
         this.waitMs = waitMs;
         this.leaseMs = leaseMs;
+        this.metrics = metrics;
     }
 
     @Override
     public ReservationResponse hold(Long userId, Long seatId) {
         RLock lock = redissonClient.getLock("seat:lock:" + seatId);
         boolean acquired;
+        
+        var waitSample = metrics.start();
         try {
             acquired = lock.tryLock(waitMs, leaseMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TicketLabException(ErrorCode.LOCK_ACQUIRE_FAILED);
         }
+        metrics.recordWait("redis", waitSample);
+
         if (!acquired) {
             throw new TicketLabException(ErrorCode.LOCK_ACQUIRE_FAILED);
         }
+
         try {
             return core.hold(userId, seatId);
         } finally {
