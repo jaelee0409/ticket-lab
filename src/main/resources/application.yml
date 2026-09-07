@@ -53,6 +53,9 @@ ticketlab:
     optimistic-max-retries: ${OPTIMISTIC_MAX_RETRIES:3}
     redis-wait-ms: ${REDIS_LOCK_WAIT_MS:3000}
     redis-lease-ms: ${REDIS_LOCK_LEASE_MS:5000}
+  queue:
+    # How long an admitted user keeps their pass before it expires and the slot is reclaimed.
+    admission-ttl: ${QUEUE_ADMISSION_TTL:30s}
 
 management:
   endpoints:
