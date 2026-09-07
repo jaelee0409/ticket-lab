@@ -34,6 +34,9 @@ param(
     [int]    $Repeats = 3,
     [string] $WarmupDuration = "10s",
 
+    # 각 조건마다 이 전략들을 모두 측정한다.
+    [string[]] $Strategies = @("none"),
+
     [string] $Label = "",
     [string] $Out = "loadtest/results/results.csv",
     [int]    $Port = 8080
@@ -101,9 +104,22 @@ SELECT count(*) FROM (
     return [int](Invoke-Psql $sql).Trim()
 }
 
-function Start-App($poolSize) {
+# 좌석이 다 팔리기까지 걸린 시간. 첫 예약과 마지막 예약의 간격으로 잰다.
+# 두 값 모두 애플리케이션 시계에서 나오므로 컨테이너와의 시각 차이가 끼지 않는다.
+# 좌석이 하나뿐이면 예약도 하나뿐이라 0 이 나온다. 그 조건에서는 의미가 없는 값이다.
+function Get-SelloutSeconds {
+    $sql = "SELECT COALESCE(round(EXTRACT(EPOCH FROM (max(created_at) - min(created_at)))::numeric, 3), 0) FROM reservation;"
+    return [double](Invoke-Psql $sql).Trim()
+}
+
+function Get-SoldSeats {
+    return [int](Invoke-Psql "SELECT count(*) FROM reservation;").Trim()
+}
+
+function Start-App($poolSize, $strategy) {
     $env:DB_POOL_SIZE = "$poolSize"
     $env:SERVER_PORT = "$Port"
+    $env:LOCK_STRATEGY = "$strategy"
     $proc = Start-Process -FilePath "java" `
         -ArgumentList @("-jar", $jar) `
         -PassThru -WindowStyle Hidden `
@@ -129,7 +145,7 @@ function Stop-App($proc) {
 
 function Invoke-K6($vus, $duration, $seatCount, $summaryPath) {
     $args = @(
-        "run", "--quiet",
+        "run", "--quiet", "--log-output=none",
         "--summary-trend-stats", "avg,min,med,p(95),p(99),max",
         "--summary-export", $summaryPath,
         "--env", "BASE_URL=$baseUrl",
@@ -199,9 +215,11 @@ Write-Host ""
 Write-Host "실험: $Label" -ForegroundColor Green
 Write-Host "  스윕     $Sweep = $($Values -join ', ')"
 Write-Host "  고정     VUS=$Vus DURATION=$Duration SEAT_COUNT=$SeatCount POOL=$PoolSize"
+Write-Host "  전략     $($Strategies -join ', ')"
 Write-Host "  반복     $Repeats 회 (+ 워밍업 $WarmupDuration)"
 Write-Host "  출력     $Out"
 
+foreach ($strategy in $Strategies) {
 foreach ($value in $Values) {
     # 이번 조건 확정
     $vus = $Vus; $seats = $SeatCount; $pool = $PoolSize
@@ -211,10 +229,10 @@ foreach ($value in $Values) {
         "DB_POOL_SIZE" { $pool  = $value }
     }
 
-    Write-Step "$Sweep = $value  (VUS=$vus SEAT_COUNT=$seats POOL=$pool)"
+    Write-Step "[$strategy]  $Sweep = $value  (VUS=$vus SEAT_COUNT=$seats POOL=$pool)"
 
     Reset-Database
-    $proc = Start-App $pool
+    $proc = Start-App $pool $strategy
 
     try {
         # 워밍업. JVM은 처음 수십 초를 인터프리터로 돌다가 자주 실행되는
@@ -225,7 +243,7 @@ foreach ($value in $Values) {
         Invoke-K6 $vus $WarmupDuration $seats (Join-Path $tmpDir "warmup.json")
         Write-Host " 완료"
 
-        $tpsList = @(); $p50List = @(); $p95List = @(); $p99List = @(); $excessList = @()
+        $tpsList = @(); $p50List = @(); $p95List = @(); $p99List = @(); $excessList = @(); $selloutList = @()
 
         for ($r = 1; $r -le $Repeats; $r++) {
             Reset-Reservations
@@ -235,15 +253,18 @@ foreach ($value in $Values) {
             $m = Read-K6Summary $summaryPath
             $excess = Get-ExcessReservations
             $dupSeats = Get-DuplicatedSeats
+            $sellout = Get-SelloutSeconds
+            $sold = Get-SoldSeats
 
             $tpsList += $m.tps; $p50List += $m.p50_ms; $p95List += $m.p95_ms
-            $p99List += $m.p99_ms; $excessList += $excess
+            $p99List += $m.p99_ms; $excessList += $excess; $selloutList += $sellout
 
-            Write-Host ("   {0}회차  TPS {1,8}  p50 {2,7}ms  p95 {3,7}ms  p99 {4,7}ms  초과예약 {5,4}  오류율 {6}" -f `
-                $r, $m.tps, $m.p50_ms, $m.p95_ms, $m.p99_ms, $excess, $m.error_rate)
+            Write-Host ("   {0}회차  p50 {1,7}ms  p95 {2,7}ms  매진 {3,7}s  판매 {4,5}  초과예약 {5,4}  오류율 {6}" -f `
+                $r, $m.p50_ms, $m.p95_ms, $sellout, $sold, $excess, $m.error_rate)
 
             Add-CsvRow @{
                 run_id = $runId; label = $Label; sweep = $Sweep; value = $value
+                strategy = $strategy; sellout_sec = $sellout; sold_seats = $sold
                 kind = "run"; repeat = $r
                 vus = $vus; duration = $Duration; seat_count = $seats; pool_size = $pool
                 tps = $m.tps; p50_ms = $m.p50_ms; p95_ms = $m.p95_ms; p99_ms = $m.p99_ms
@@ -265,6 +286,7 @@ foreach ($value in $Values) {
 
         Add-CsvRow @{
             run_id = $runId; label = $Label; sweep = $Sweep; value = $value
+            strategy = $strategy; sellout_sec = (Get-Median ([double[]]$selloutList)); sold_seats = ""
             kind = "median"; repeat = 0
             vus = $vus; duration = $Duration; seat_count = $seats; pool_size = $pool
             tps = $medTps; p50_ms = (Get-Median $p50List); p95_ms = (Get-Median $p95List)
@@ -276,6 +298,7 @@ foreach ($value in $Values) {
     finally {
         Stop-App $proc
     }
+}
 }
 
 Write-Host ""

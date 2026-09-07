@@ -58,24 +58,30 @@ public class ReservationCore {
         return holdSeat(userId, seat);
     }
 
+    /**
+     * Shared tail of the seat-claiming paths.
+     *
+     * The status check comes before the user lookup on purpose. Under a rush
+     * almost every request loses, and a loser should not pay for a query whose
+     * result it is about to throw away. Keeping this order identical across
+     * strategies is also what makes their measurements comparable: an extra
+     * query on the losing path would show up as a difference in lock cost.
+     */
     private ReservationResponse holdSeat(Long userId, Seat seat) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new TicketLabException(ErrorCode.USER_NOT_FOUND));
-
-        Seat seatToHold = seatRepository.findById(seat.getId())
-                .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
-
-        log.info("좌석 선점 요청. seatId={} status={}", seatToHold.getId(), seat.getStatus());
-
         if (seat.getStatus() != SeatStatus.AVAILABLE) {
             throw new TicketLabException(ErrorCode.SEAT_NOT_AVAILABLE);
         }
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.USER_NOT_FOUND));
+
         seat.hold();
-        Reservation reservation = reservationRepository.save(new Reservation(user, seat, Instant.now().plus(holdDuration)));
-        log.info("좌석 선점 완료. seatId={} reservationId={}", seatToHold.getId(), reservation.getId());
-        
-        return new ReservationResponse(reservation.getId(), seatToHold.getId(), seatToHold.getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
+        Reservation reservation = reservationRepository.save(
+                new Reservation(user, seat, Instant.now().plus(holdDuration)));
+        log.info("좌석 선점 완료. seatId={} reservationId={}", seat.getId(), reservation.getId());
+
+        return new ReservationResponse(reservation.getId(), seat.getId(), seat.getSeatNo(),
+                reservation.getStatus(), reservation.getExpiresAt());
     }
 
     @Transactional
@@ -98,5 +104,32 @@ public class ReservationCore {
         Reservation reservation = reservationRepository.save(new Reservation(user, seat, Instant.now().plus(holdDuration)));
         log.info("좌석 선점 완료. seatId={} reservationId={}", seat.getId(), reservation.getId());
         return new ReservationResponse(reservation.getId(), seat.getId(), seat.getSeatNo(), reservation.getStatus(), reservation.getExpiresAt());
+    }
+
+    /**
+     * Single-statement claim. The UPDATE runs first and its row count decides
+     * the outcome, so a losing request costs exactly one database round trip -
+     * no read, no lock, no retry.
+     */
+    @Transactional
+    public ReservationResponse holdAtomic(Long userId, Long seatId) {
+        int claimed = seatRepository.claimIfAvailable(
+                seatId, SeatStatus.AVAILABLE, SeatStatus.HELD);
+        if (claimed == 0) {
+            throw new TicketLabException(ErrorCode.SEAT_NOT_AVAILABLE);
+        }
+
+        // Only the winner pays for these.
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.SEAT_NOT_FOUND));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new TicketLabException(ErrorCode.USER_NOT_FOUND));
+
+        Reservation reservation = reservationRepository.save(
+                new Reservation(user, seat, Instant.now().plus(holdDuration)));
+        log.info("좌석 선점 완료. seatId={} reservationId={}", seatId, reservation.getId());
+
+        return new ReservationResponse(reservation.getId(), seatId, seat.getSeatNo(),
+                reservation.getStatus(), reservation.getExpiresAt());
     }
 }

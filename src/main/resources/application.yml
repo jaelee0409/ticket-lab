@@ -28,6 +28,12 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  tomcat:
+    # 500 VU 가 동시에 접속을 시도하면 기본 수용 큐(100)가 넘쳐 연결이 거부된다.
+    # 측정하려는 대상이 아닌 병목이라 넉넉히 늘린다.
+    accept-count: ${TOMCAT_ACCEPT_COUNT:2000}
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
 
 logging:
   pattern:
