@@ -48,6 +48,7 @@ Set-Location $root
 
 $jar = "build/libs/ticket-lab-0.0.1-SNAPSHOT.jar"
 $baseUrl = "http://localhost:$Port"
+$k6Exe = (Get-Command k6 -ErrorAction Stop).Source
 $tmpDir = Join-Path $env:TEMP "ticket-lab-runner"
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Out) | Out-Null
@@ -143,8 +144,36 @@ function Stop-App($proc) {
     }
 }
 
+# 프로메테우스 카운터는 앱 기동 이후의 누적값이다. 실행 전후의 차이를 나눠야
+# 그 구간만의 평균이 나온다. 누적값을 그대로 쓰면 워밍업이 섞여 들어간다.
+function Get-PromValue($text, $name) {
+    $m = [regex]::Match($text, "(?m)^" + [regex]::Escape($name) + "(\{[^}]*\})?\s+([0-9.eE+-]+)\s*$")
+    if ($m.Success) { return [double]$m.Groups[2].Value }
+    return 0.0
+}
+
+function Get-PoolSnapshot {
+    try {
+        $t = (Invoke-WebRequest -Uri "$baseUrl/actuator/prometheus" -UseBasicParsing -TimeoutSec 5).Content
+    } catch {
+        return $null
+    }
+    return [pscustomobject]@{
+        acquire_sum   = Get-PromValue $t "hikaricp_connections_acquire_seconds_sum"
+        acquire_count = Get-PromValue $t "hikaricp_connections_acquire_seconds_count"
+        usage_sum     = Get-PromValue $t "hikaricp_connections_usage_seconds_sum"
+        usage_count   = Get-PromValue $t "hikaricp_connections_usage_seconds_count"
+        timeouts      = Get-PromValue $t "hikaricp_connections_timeout_total"
+    }
+}
+
+# k6 를 띄워놓고 도는 동안 DB 쪽을 들여다본다. 실행이 끝난 뒤에 재면 부하가
+# 이미 사라진 뒤라 활성 커넥션도 CPU도 0 으로 나온다. 풀 실험에서는 이 두 값이
+# 결과의 절반이므로 실행 중에 표본을 모아야 한다.
 function Invoke-K6($vus, $duration, $seatCount, $summaryPath) {
-    $args = @(
+    $before = Get-PoolSnapshot
+
+    $k6Args = @(
         "run", "--quiet", "--log-output=none",
         "--summary-trend-stats", "avg,min,med,p(95),p(99),max",
         "--summary-export", $summaryPath,
@@ -154,7 +183,54 @@ function Invoke-K6($vus, $duration, $seatCount, $summaryPath) {
         "--env", "SEAT_COUNT=$seatCount",
         "loadtest/reserve.js"
     )
-    & k6 @args | Out-Null
+    $k6 = Start-Process -FilePath $k6Exe -ArgumentList $k6Args -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput (Join-Path $tmpDir "k6.out") `
+            -RedirectStandardError  (Join-Path $tmpDir "k6.err")
+
+    $cpuSamples  = New-Object System.Collections.ArrayList
+    $connSamples = New-Object System.Collections.ArrayList
+    $totalSamples = New-Object System.Collections.ArrayList
+    while (-not $k6.HasExited) {
+        $cpu = docker stats --no-stream --format "{{.CPUPerc}}" ticket-lab-postgres
+        if ("$cpu" -match "([0-9.]+)") { [void]$cpuSamples.Add([double]$Matches[1]) }
+
+        # 앱이 빌려간 커넥션 중 지금 실제로 쿼리를 돌리고 있는 것만 센다.
+        # idle 은 풀이 쥐고만 있는 것이라 DB 입장에서는 부하가 아니다.
+        $act = Invoke-Psql "SELECT count(*) FROM pg_stat_activity WHERE datname='ticketlab' AND state='active';"
+        if ("$act" -match "([0-9]+)") { [void]$connSamples.Add([double]$Matches[1]) }
+
+        # 풀이 실제로 열어둔 연결 수. PostgreSQL 은 연결 하나당 서버 프로세스를
+        # 하나 띄우므로, 이 값이 곧 DB 가 떠안은 프로세스 수이자 메모리 비용이다.
+        $tot = Invoke-Psql "SELECT count(*) FROM pg_stat_activity WHERE datname='ticketlab';"
+        if ("$tot" -match "([0-9]+)") { [void]$totalSamples.Add([double]$Matches[1]) }
+    }
+    $k6.WaitForExit()
+
+    $after = Get-PoolSnapshot
+
+    $acquireMs = 0.0; $usageMs = 0.0; $timeouts = 0
+    if ($null -ne $before -and $null -ne $after) {
+        $dc = $after.acquire_count - $before.acquire_count
+        if ($dc -gt 0) { $acquireMs = [math]::Round((($after.acquire_sum - $before.acquire_sum) / $dc) * 1000, 3) }
+        $uc = $after.usage_count - $before.usage_count
+        if ($uc -gt 0) { $usageMs = [math]::Round((($after.usage_sum - $before.usage_sum) / $uc) * 1000, 3) }
+        $timeouts = [int]($after.timeouts - $before.timeouts)
+    }
+
+    $avgCpu = 0.0; $avgConn = 0.0; $avgTotal = 0.0
+    if ($cpuSamples.Count  -gt 0) { $avgCpu  = [math]::Round((($cpuSamples  | Measure-Object -Average).Average), 1) }
+    if ($connSamples.Count -gt 0) { $avgConn = [math]::Round((($connSamples | Measure-Object -Average).Average), 1) }
+    if ($totalSamples.Count -gt 0) { $avgTotal = [math]::Round((($totalSamples | Measure-Object -Maximum).Maximum), 0) }
+
+    return [pscustomobject]@{
+        acquire_ms    = $acquireMs   # 커넥션을 빌리기까지 기다린 시간
+        usage_ms      = $usageMs     # 빌린 뒤 반납까지 쥐고 있던 시간
+        pool_timeouts = $timeouts    # 제한 시간 안에 못 빌린 횟수. 0 이 아니면 측정 무효
+        db_cpu_pct    = $avgCpu
+        db_active     = $avgConn
+        db_conns      = $avgTotal   # DB 가 떠안은 총 연결(=프로세스) 수
+        samples       = $cpuSamples.Count
+    }
 }
 
 function Read-K6Summary($path) {
@@ -240,15 +316,16 @@ foreach ($value in $Values) {
         # 성능이라 버린다. 결과는 기록하지 않는다.
         Write-Host "   워밍업..." -NoNewline
         Reset-Reservations
-        Invoke-K6 $vus $WarmupDuration $seats (Join-Path $tmpDir "warmup.json")
+        Invoke-K6 $vus $WarmupDuration $seats (Join-Path $tmpDir "warmup.json") | Out-Null
         Write-Host " 완료"
 
         $tpsList = @(); $p50List = @(); $p95List = @(); $p99List = @(); $excessList = @(); $selloutList = @()
+        $acqList = @(); $cpuList = @(); $connList = @(); $usageList = @(); $totList = @()
 
         for ($r = 1; $r -le $Repeats; $r++) {
             Reset-Reservations
             $summaryPath = Join-Path $tmpDir "run-$r.json"
-            Invoke-K6 $vus $Duration $seats $summaryPath
+            $probe = Invoke-K6 $vus $Duration $seats $summaryPath
 
             $m = Read-K6Summary $summaryPath
             $excess = Get-ExcessReservations
@@ -258,9 +335,15 @@ foreach ($value in $Values) {
 
             $tpsList += $m.tps; $p50List += $m.p50_ms; $p95List += $m.p95_ms
             $p99List += $m.p99_ms; $excessList += $excess; $selloutList += $sellout
+            $acqList += $probe.acquire_ms; $cpuList += $probe.db_cpu_pct
+            $connList += $probe.db_active; $usageList += $probe.usage_ms
+            $totList += $probe.db_conns
 
-            Write-Host ("   {0}회차  p50 {1,7}ms  p95 {2,7}ms  매진 {3,7}s  판매 {4,5}  초과예약 {5,4}  오류율 {6}" -f `
-                $r, $m.p50_ms, $m.p95_ms, $sellout, $sold, $excess, $m.error_rate)
+            Write-Host ("   {0}회차  TPS {1,7}  p99 {2,7}ms  획득대기 {3,7}ms  DB연결 {4,4}  DB CPU {5,5}%  오류율 {6}" -f `
+                $r, $m.tps, $m.p99_ms, $probe.acquire_ms, $probe.db_conns, $probe.db_cpu_pct, $m.error_rate)
+            if ($probe.pool_timeouts -gt 0) {
+                Write-Host ("      경고: 커넥션 획득 타임아웃 {0}건 — 이 회차는 측정이 아니다" -f $probe.pool_timeouts) -ForegroundColor Red
+            }
 
             Add-CsvRow @{
                 run_id = $runId; label = $Label; sweep = $Sweep; value = $value
@@ -270,6 +353,9 @@ foreach ($value in $Values) {
                 tps = $m.tps; p50_ms = $m.p50_ms; p95_ms = $m.p95_ms; p99_ms = $m.p99_ms
                 max_ms = $m.max_ms; http_reqs = $m.reqs; check_ok_rate = $m.check_ok; error_rate = $m.error_rate
                 excess_reservations = $excess; duplicated_seats = $dupSeats
+                acquire_ms = $probe.acquire_ms; usage_ms = $probe.usage_ms
+                pool_timeouts = $probe.pool_timeouts
+                db_active = $probe.db_active; db_conns = $probe.db_conns; db_cpu_pct = $probe.db_cpu_pct
                 tps_spread_pct = ""
             }
         }
@@ -281,8 +367,9 @@ foreach ($value in $Values) {
             $spread = [math]::Round(((($tpsList | Measure-Object -Maximum).Maximum - ($tpsList | Measure-Object -Minimum).Minimum) / $medTps) * 100, 1)
         }
 
-        Write-Host ("   중간값   TPS {0,8}  p95 {1,7}ms  초과예약 {2,4}   (TPS 편차 {3}%)" -f `
-            $medTps, (Get-Median $p95List), $medExcess, $spread) -ForegroundColor Yellow
+        Write-Host ("   중간값   TPS {0,8}  p99 {1,7}ms  획득대기 {2,7}ms  DB연결 {3,4}  DB CPU {4,5}%   (TPS 편차 {5}%)" -f `
+            $medTps, (Get-Median $p99List), (Get-Median ([double[]]$acqList)), `
+            (Get-Median ([double[]]$totList)), (Get-Median ([double[]]$cpuList)), $spread) -ForegroundColor Yellow
 
         Add-CsvRow @{
             run_id = $runId; label = $Label; sweep = $Sweep; value = $value
@@ -292,6 +379,10 @@ foreach ($value in $Values) {
             tps = $medTps; p50_ms = (Get-Median $p50List); p95_ms = (Get-Median $p95List)
             p99_ms = (Get-Median $p99List); max_ms = ""; http_reqs = ""
             check_ok_rate = ""; error_rate = ""; excess_reservations = $medExcess; duplicated_seats = ""
+            acquire_ms = (Get-Median ([double[]]$acqList)); usage_ms = (Get-Median ([double[]]$usageList))
+            pool_timeouts = ""
+            db_active = (Get-Median ([double[]]$connList)); db_conns = (Get-Median ([double[]]$totList))
+            db_cpu_pct = (Get-Median ([double[]]$cpuList))
             tps_spread_pct = $spread
         }
     }

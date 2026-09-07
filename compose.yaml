@@ -15,6 +15,10 @@ services:
       POSTGRES_USER: ticketlab
       POSTGRES_PASSWORD: ticketlab
       LANG: C.UTF-8
+    # 풀 크기 실험이 200까지 올라간다. 기본 max_connections(100) 로는 그 위에서
+    # 연결이 거부되어 풀이 아니라 한계를 측정하게 된다. 한계를 밀어두고 풀만
+    # 변수로 남긴다. 연결 하나당 서버 프로세스가 하나 뜨므로 메모리도 함께 늘린다.
+    command: postgres -c max_connections=300
     ports:
       - "5432:5432"
     volumes:
@@ -27,7 +31,7 @@ services:
       resources:
         limits:
           cpus: "${POSTGRES_CPUS:-4}"
-          memory: "${POSTGRES_MEMORY:-2g}"
+          memory: "${POSTGRES_MEMORY:-4g}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ticketlab -d ticketlab"]
       interval: 5s
