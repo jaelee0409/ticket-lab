@@ -39,7 +39,10 @@ param(
 
     [string] $Label = "",
     [string] $Out = "loadtest/results/results.csv",
-    [int]    $Port = 8080
+    [int]    $Port = 8080,
+
+    # 시드할 좌석 수. Values 의 최대값보다 커야 한다.
+    [int]    $SeatPool = 1200
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,6 +69,9 @@ function Invoke-Psql($sql) {
 
 # 모든 실행이 완전히 같은 상태에서 출발하도록 되돌린다. 이게 없으면 두 번째
 # 실행은 첫 번째가 팔아치운 좌석 위에서 시작해 조건이 달라진다.
+# 좌석은 스윕 최대값보다 넉넉히 만든다. 모자라면 k6 가 있는 만큼만 집어가서
+# SEAT_COUNT=1000 을 넘겨도 실제로는 500 으로 도는데, 로그에는 1000 이 찍혀
+# 기록과 실측이 어긋난다. 실제로 한 번 겪었다.
 function Reset-Database {
     Invoke-Psql @"
 DELETE FROM payment;
@@ -76,7 +82,7 @@ INSERT INTO event (title, venue, starts_at)
 VALUES ('loadtest event', 'measurement hall', now() + interval '30 days');
 INSERT INTO seat (event_id, seat_no, grade, price, status)
 SELECT (SELECT id FROM event LIMIT 1), 'A-' || lpad(n::text, 4, '0'), 'R', 120000, 'AVAILABLE'
-FROM generate_series(1, 500) n;
+FROM generate_series(1, ${SeatPool}) n;
 "@ | Out-Null
 }
 

@@ -117,6 +117,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="loadtest/results/contention.csv")
     ap.add_argument("--out", default="loadtest/results/lock-strategies.png")
+    # 시더가 만든 좌석보다 큰 SEAT_COUNT 는 실제로는 시드 수만큼만 돌아간다.
+    # 그런 조건은 바로 아래 조건과 같은 측정이므로 중복이다.
+    ap.add_argument("--max-seats", type=int, default=None)
     args = ap.parse_args()
 
     path = Path(args.csv)
@@ -126,6 +129,8 @@ def main() -> int:
 
     df = pd.read_csv(path, encoding="utf-8-sig")
     df = df[df["run_id"] == df["run_id"].max()]
+    if args.max_seats:
+        df = df[df["value"] <= args.max_seats]
     runs = df[df["kind"] == "run"].copy()
     med = df[df["kind"] == "median"].copy()
     seats = sorted(med["value"].unique())
