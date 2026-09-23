@@ -26,6 +26,15 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+  task:
+    scheduling:
+      pool:
+        # Default is a single thread for every @Scheduled method in the app.
+        # The seat sweeper and the queue admitter would then take turns, and a
+        # slow sweep would silently skip admission ticks - the knob this step
+        # measures would drift with unrelated work.
+        size: ${SCHEDULER_POOL_SIZE:2}
+
 server:
   port: ${SERVER_PORT:8080}
   tomcat:
@@ -56,6 +65,8 @@ ticketlab:
   queue:
     # How long an admitted user keeps their pass before it expires and the slot is reclaimed.
     admission-ttl: ${QUEUE_ADMISSION_TTL:30s}
+    admission-rate: ${QUEUE_ADMISSION_RATE:50}
+    tick-ms: ${QUEUE_TICK_MS:100}
 
 management:
   endpoints:

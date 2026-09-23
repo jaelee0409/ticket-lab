@@ -1,9 +1,13 @@
 package com.ticketlab.queue;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
 import com.ticketlab.common.error.ErrorCode;
@@ -42,5 +46,42 @@ public class QueueService {
 
             }
         }
+    }
+
+    /**
+     * Takes the next {@code count} people off the front of the line.
+     *
+     * ZPOPMIN removes and returns in one command, so two callers can never pull
+     * the same person twice. That is the same reason the atomic lock strategy
+     * uses a single conditional UPDATE instead of a read followed by a write.
+     */
+    public List<QueueEntry> pollNext(int count) {
+        Set<ZSetOperations.TypedTuple<String>> popped = redis.opsForZSet().popMin(WAITING, count);
+        if (popped == null || popped.isEmpty()) {
+            return List.of();
+        }
+
+        List<QueueEntry> entries = new ArrayList<>(popped.size());
+        for (ZSetOperations.TypedTuple<String> tuple : popped) {
+            String userId = tuple.getValue();
+            Double enqueuedAt = tuple.getScore();
+            if (userId == null || enqueuedAt == null) {
+                continue;
+            }
+            // The score is the millisecond timestamp written at ZADD time.
+            entries.add(new QueueEntry(userId, enqueuedAt.longValue()));
+        }
+        return entries;
+    }
+
+    /** 줄 길이. 지표용 게이지가 매 틱 읽어간다. */
+    public long waitingCount() {
+        Long size = redis.opsForZSet().size(WAITING);
+        return size == null ? 0L : size;
+    }
+
+    /** Issues the pass. The TTL is what eventually reclaims a no-show's slot. */
+    public void admit(String userId) {
+        redis.opsForValue().set(ADMITTED_PREFIX + userId, "1", admissionTtl);
     }
 }
