@@ -17,7 +17,8 @@ public enum ErrorCode {
     RESERVATION_NOT_PENDING(HttpStatus.CONFLICT, "RESV_003", "확정할 수 있는 상태가 아닙니다."),
     RESERVATION_EXPIRED(HttpStatus.CONFLICT, "RESV_004", "선점 시간이 만료되었습니다."),
     LOCK_ACQUIRE_FAILED(HttpStatus.CONFLICT, "LOCK_001", "좌석 잠금을 얻지 못했습니다."),
-    QUEUE_NOT_FOUND(HttpStatus.NOT_FOUND, "QUEUE_001", "대기열에 없습니다.");
+    QUEUE_NOT_FOUND(HttpStatus.NOT_FOUND, "QUEUE_001", "대기열에 없습니다."),
+    QUEUE_NOT_ADMITTED(HttpStatus.FORBIDDEN, "QUEUE_002", "아직 입장 순서가 아닙니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

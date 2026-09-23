@@ -32,10 +32,19 @@ public class QueueService {
         return status(userId);
     }
 
+    /**
+     * Does this user hold a valid pass right now?
+     *
+     * Public because the booking path asks the same question. Keeping the key
+     * format in one class means a rename cannot leave the gate checking a key
+     * nobody writes any more.
+     */
+    public boolean isAdmitted(String userId) {
+        return Boolean.TRUE.equals(redis.hasKey(ADMITTED_PREFIX + userId));
+    }
+
     public QueueStatusResponse status(Long userId) {
-        String admittedKey = ADMITTED_PREFIX + userId;
-        Boolean isAdmitted = redis.hasKey(admittedKey);
-        if (Boolean.TRUE.equals(isAdmitted)) {
+        if (isAdmitted(String.valueOf(userId))) {
             return new QueueStatusResponse(0, true);
         } else {
             Long rank = redis.opsForZSet().rank(WAITING, userId.toString());

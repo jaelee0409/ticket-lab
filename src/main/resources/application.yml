@@ -63,6 +63,10 @@ ticketlab:
     redis-wait-ms: ${REDIS_LOCK_WAIT_MS:3000}
     redis-lease-ms: ${REDIS_LOCK_LEASE_MS:5000}
   queue:
+    # Off by default. The step 7 and 8 load scripts never enter the queue, so
+    # gating unconditionally would make those experiments unreproducible.
+    # Step 9 turns it on; everything before it must still run as it did.
+    enabled: ${QUEUE_ENABLED:false}
     # How long an admitted user keeps their pass before it expires and the slot is reclaimed.
     admission-ttl: ${QUEUE_ADMISSION_TTL:30s}
     admission-rate: ${QUEUE_ADMISSION_RATE:50}
