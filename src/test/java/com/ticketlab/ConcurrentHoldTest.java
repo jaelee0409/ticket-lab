@@ -64,7 +64,7 @@ class ConcurrentHoldTest {
     private ReservationRepository reservationRepository;
 
     @ParameterizedTest(name = "{0} 전략은 좌석 하나를 한 명에게만 준다")
-    @ValueSource(strings = {"pessimistic", "optimistic", "redis"})
+    @ValueSource(strings = {"pessimistic", "optimistic", "atomic", "redis"})
     void onlyOneWinnerPerSeat(String strategyName) throws Exception {
         ReservationLockStrategy strategy = strategies.get(strategyName);
         assertThat(strategy).as("전략 '%s' 이 등록되어 있어야 한다", strategyName).isNotNull();
