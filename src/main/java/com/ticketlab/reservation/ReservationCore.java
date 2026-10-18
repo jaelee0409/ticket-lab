@@ -109,7 +109,9 @@ public class ReservationCore {
     /**
      * Single-statement claim. The UPDATE runs first and its row count decides
      * the outcome, so a losing request costs exactly one database round trip -
-     * no read, no lock, no retry.
+     * no read, no explicit lock, no retry. That round trip can still block: a
+     * loser that reaches the row before the winner commits waits on the row lock,
+     * then re-checks the WHERE and updates 0 rows.
      */
     @Transactional
     public ReservationResponse holdAtomic(Long userId, Long seatId) {
