@@ -159,7 +159,7 @@ loadtest/
 
 ## AI assistance
 
-10 of the 44 commits were written with Claude and carry a `Co-Authored-By: Claude` trailer.
+Through 2026-10-18, 14 of the 48 commits were written with Claude and carry a `Co-Authored-By: Claude` trailer.
 
 ---
 

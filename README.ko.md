@@ -99,4 +99,4 @@ loadtest/
 
 ## AI 도움
 
-커밋 44개 중 10개는 Claude와 함께 작성했고 `Co-Authored-By: Claude`가 붙어 있습니다.
+2026-10-18까지 커밋 48개 중 14개는 Claude와 함께 작성했고 `Co-Authored-By: Claude`가 붙어 있습니다.
